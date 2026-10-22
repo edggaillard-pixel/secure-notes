@@ -197,3 +197,8 @@ Ce qui n'est pas parfait
 Ce que j'aimerais ajouter : de la double authentification (TOTP ou passkeys),
 un vrai gestionnaire de secrets type Vault, un antivirus sur les uploads, et
 une CI GitHub Actions qui lance les tests à chaque push.
+
+IA
+--
+
+L'intelligence artificielle a été utilisée pour concevoir la charte graphique et structurer les rubriques de ce projet.
