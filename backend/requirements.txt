@@ -1,0 +1,15 @@
+# Dépendances épinglées (A06 - Vulnerable and Outdated Components).
+# Vérifier régulièrement avec : pip-audit -r requirements.txt
+Flask==3.1.3
+Werkzeug==3.1.9
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.1.6
+Flask-Limiter==4.1.1
+limits==5.8.0
+redis==8.1.0
+argon2-cffi==25.1.0
+cryptography==50.0.1
+pydantic==2.13.5
+python-magic==0.4.27
+psycopg[binary]==3.3.6
+gunicorn==26.2.0

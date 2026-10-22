@@ -1,0 +1,101 @@
+# Secure Notes — environnement complet.
+#   python3 scripts/generate-secrets.py > .env
+#   docker compose up --build             -> https://localhost:8443
+#   docker compose --profile test run --rm tests
+#
+# Segmentation réseau : seul Nginx est exposé. PostgreSQL et Redis sont sur
+# un réseau « internal » sans accès Internet ni port publié sur l'hôte.
+
+name: secure-notes
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true      # pas d'élévation via binaires setuid
+  cap_drop: [ALL]                 # aucune capability Linux par défaut
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    <<: *hardening
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]   # requis par l'entrypoint Postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    <<: *hardening
+    cap_add: [CHOWN, SETGID, SETUID]
+    # Stockage des compteurs de rate limiting partagés entre workers Gunicorn.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?}", "--save", "", "--appendonly", "no"]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    <<: *hardening
+    read_only: true                       # système de fichiers en lecture seule...
+    tmpfs: [/tmp]                         # ...sauf /tmp (Gunicorn)
+    environment:
+      # Seul /tmp (tmpfs) est inscriptible : Gunicorn y place son socket de contrôle.
+      HOME: /tmp
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      RATELIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD}@redis:6379/0
+      DATA_ENCRYPTION_KEYS: ${DATA_ENCRYPTION_KEYS:?}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?}
+      UPLOAD_DIR: /data/uploads
+      TRUSTED_PROXY_COUNT: "1"
+    volumes:
+      - uploads:/data/uploads             # hors du code ET hors de la racine web Nginx
+    networks: [internal, edge]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  proxy:
+    build: ./frontend
+    <<: *hardening
+    environment:
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+      - "${HTTPS_PORT:-8443}:8443"
+    volumes:
+      - certs:/etc/nginx/certs
+    networks: [edge]
+    depends_on: [backend]
+
+  tests:
+    profiles: [test]
+    build:
+      context: ./backend
+      target: test
+    network_mode: none                    # les tests n'ont besoin d'aucun réseau
+
+networks:
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  uploads:
+  certs:
+# GROGNON

@@ -1,0 +1,9 @@
+# Fins de ligne Unix (LF) partout, y compris sous Windows.
+# Indispensable : un script shell en CRLF ne s'exécute pas dans un conteneur
+# Linux ("/bin/sh^M: not found").
+* text=auto eol=lf
+
+# Fichiers binaires : jamais de conversion
+*.png binary
+*.jpg binary
+*.pdf binary

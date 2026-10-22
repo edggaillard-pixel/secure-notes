@@ -1,0 +1,14 @@
+# Secrets : ne jamais committer
+.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+
+# Node
+node_modules/
+dist/
